@@ -217,6 +217,7 @@ export type PanelKind =
   | 'notebook'
   | 'settings'
   | 'villager'
+  | 'wanderer'
   | 'online';
 
 export interface PanelState {

@@ -1,7 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { PaperPanel, Btn } from './common';
 import { audio } from '../../lib/audio';
 import { VILLAGERS } from '../world/Villagers';
+import { WANDERERS } from '../../data/wanderers';
 import { MODES, MODE_ORDER } from '../../data/modes';
 import { useGame } from '../../state/store';
 
@@ -117,6 +118,20 @@ export function VillagerPanel({ villagerId }: { villagerId: string }): React.JSX
   return (
     <PaperPanel title={`💬 ${v.name}`}>
       <p className="dialogue-line">“{v.line}”</p>
+    </PaperPanel>
+  );
+}
+
+export function WandererPanel({ wandererId }: { wandererId: string }): React.JSX.Element {
+  const w = WANDERERS.find((x) => x.id === wandererId) ?? WANDERERS[0];
+  // Pick one of this character's lines fresh each time you strike up a chat.
+  const line = useMemo(() => w.lines[Math.floor(Math.random() * w.lines.length)], [w]);
+  useEffect(() => {
+    audio.speak('villager', line, w.name);
+  }, [line, w]);
+  return (
+    <PaperPanel title={`💬 ${w.name}`}>
+      <p className="dialogue-line">“{line}”</p>
     </PaperPanel>
   );
 }

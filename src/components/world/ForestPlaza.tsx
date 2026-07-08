@@ -12,6 +12,7 @@ import { CountingTheater } from './CountingTheater';
 import { CampfireReflection } from './CampfireReflection';
 import { ForestCharterTree } from './ForestCharterTree';
 import { Villagers } from './Villagers';
+import { Wanderers } from './Wanderers';
 import { VoterMeadow } from './VoterMeadow';
 import { BoothVisitors } from './BoothVisitors';
 import { FireflyGuide } from './FireflyGuide';
@@ -150,6 +151,7 @@ export function ForestPlaza(): React.JSX.Element {
       <CampfireReflection />
       <ForestCharterTree />
       <Villagers />
+      <Wanderers />
       <VoterMeadow />
       <BoothVisitors />
       <FireflyGuide />

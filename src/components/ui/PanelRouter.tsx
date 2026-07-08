@@ -1,7 +1,7 @@
 import React from 'react';
 import { useGame } from '../../state/store';
 import type { CandidateId, IssueId, SystemId } from '../../types/game';
-import { GatePanel, CharterPanel, VillagerPanel } from './StoryPanels';
+import { GatePanel, CharterPanel, VillagerPanel, WandererPanel } from './StoryPanels';
 import { WorkshopPanel } from './WorkshopPanel';
 import { SetupPanel } from './SetupPanel';
 import { MapPanel } from './MapPanel';
@@ -43,6 +43,7 @@ export function PanelRouter(): React.JSX.Element | null {
     case 'notebook': return <CivicNotebook />;
     case 'settings': return <SettingsPanel />;
     case 'villager': return <VillagerPanel villagerId={panel.id ?? 'willow'} />;
+    case 'wanderer': return <WandererPanel wandererId={panel.id ?? 'rusty'} />;
     case 'online': return <OnlinePanel />;
     default: return null;
   }
