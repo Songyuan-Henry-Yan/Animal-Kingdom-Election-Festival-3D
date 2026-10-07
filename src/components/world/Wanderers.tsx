@@ -24,6 +24,8 @@ interface RoamState {
   /** Seconds left to stand still before picking a new spot. */
   pause: number;
   walkT: number;
+  /** Seconds spent trying to walk but barely moving (blocked by a prop). */
+  stuckT: number;
 }
 
 /** A random point in the walkable green ring. */
@@ -48,7 +50,7 @@ function Wanderer({ w, index }: { w: WandererDef; index: number }): React.JSX.El
 
   const st = useRef<RoamState>({
     x: start[0], z: start[1], tx: start[0], tz: start[1], heading: 0,
-    pause: 1 + Math.random() * 3, walkT: 0,
+    pause: 1 + Math.random() * 3, walkT: 0, stuckT: 0,
   });
 
   // One shared interactable object we keep mutating so the E-prompt follows along.
@@ -75,27 +77,47 @@ function Wanderer({ w, index }: { w: WandererDef; index: number }): React.JSX.El
         if (d < 0.3) {
           // Arrived — rest a moment, then pick a fresh destination.
           s.pause = 1.5 + Math.random() * 3.5;
+          s.stuckT = 0;
           const [ntx, ntz] = pickTarget();
           s.tx = ntx;
           s.tz = ntz;
         } else {
+          // Remember where we were, so we can tell if a prop blocked us.
+          const px = s.x;
+          const pz = s.z;
           const step = Math.min(WALK_SPEED * dt, d);
           s.x += (dx / d) * step;
           s.z += (dz / d) * step;
           s.heading = Math.atan2(dx, dz);
           s.walkT += dt * 8;
-        }
-      }
 
-      // Nudge out of any big props, just like the player does.
-      for (const c of COLLIDERS) {
-        const dx = s.x - c.x;
-        const dz = s.z - c.z;
-        const d = Math.hypot(dx, dz);
-        const min = c.r + 0.4;
-        if (d < min && d > 0.0001) {
-          s.x = c.x + (dx / d) * min;
-          s.z = c.z + (dz / d) * min;
+          // Nudge out of any big props, just like the player does.
+          for (const c of COLLIDERS) {
+            const cx = s.x - c.x;
+            const cz = s.z - c.z;
+            const cd = Math.hypot(cx, cz);
+            const min = c.r + 0.4;
+            if (cd < min && cd > 0.0001) {
+              s.x = c.x + (cx / cd) * min;
+              s.z = c.z + (cz / cd) * min;
+            }
+          }
+
+          // If the collider shove cancelled most of our step, we're wedged
+          // against a prop. Accumulate blocked time and give up on this
+          // target rather than grinding into the obstacle forever.
+          const moved = Math.hypot(s.x - px, s.z - pz);
+          if (moved < step * 0.5) {
+            s.stuckT += dt;
+            if (s.stuckT > 0.6) {
+              s.stuckT = 0;
+              const [ntx, ntz] = pickTarget();
+              s.tx = ntx;
+              s.tz = ntz;
+            }
+          } else {
+            s.stuckT = 0;
+          }
         }
       }
     }

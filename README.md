@@ -3,6 +3,9 @@
 A cozy, child-friendly, **nonpartisan civics education game** set in a storybook forest village.
 Ten friendly animal candidates, one hundred simulated voters, nine counting machines — and one big question.
 
+
+**▶ Play it in your browser:** https://songyuan-henry-yan.github.io/Animal-Kingdom-Election-Festival-3D/
+
 ## Educational goal
 
 Children learn that **the counting rule is part of the election**. The game never says one rule
