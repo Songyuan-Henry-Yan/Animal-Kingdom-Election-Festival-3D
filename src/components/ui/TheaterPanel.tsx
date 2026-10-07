@@ -347,6 +347,9 @@ export function TheaterPanel(): React.JSX.Element {
               ? '🌐 Your teacher runs the count for the room'
               : '▶ Run the Same Ballots'}
         </Btn>
+        {s.lastRun && s.lastRunBallots && !s.running && !s.reducedMotion && (
+          <Btn kind="plain" onClick={s.replayCountShow}>🎬 Watch the Count Show again</Btn>
+        )}
         {s.lastRun && <Btn kind="plain" onClick={printSummary}>🖨️ Print Summary</Btn>}
       </div>
 

@@ -633,6 +633,56 @@ class AudioManager {
     this.tone({ freq: 260, freqEnd: 300, dur: 0.3, gain: 0.06, wave: 'sine' });
     this.caption('🔊 The old charter scroll unrolls.');
   }
+
+  /**
+   * Schedules the whole Count Show soundtrack on the audio clock (times in
+   * seconds from now): paper flutters while ballots fly, a soft drumroll, one
+   * rising chime per machine, and a small finale. Returns a stopper for Skip.
+   */
+  countShow(plan: { ballotsFrom: number; ballotsTo: number; steps: number[]; outro: number }): () => void {
+    if (!this.ctx) return () => undefined;
+    const ctx = this.ctx;
+    const bus = ctx.createGain();
+    bus.gain.value = 1;
+    bus.connect(this.sfxBus);
+    const t0 = this.now() + 0.05;
+
+    // paper ballots fluttering through the air
+    for (let t = plan.ballotsFrom; t < plan.ballotsTo; t += 0.09 + Math.random() * 0.05) {
+      this.noiseHit({
+        t: t0 + t, dur: 0.08, gain: 0.035 + Math.random() * 0.03,
+        type: 'bandpass', freq: 1700 + Math.random() * 1200, q: 1.6, bus,
+      });
+    }
+    // a soft drumroll that swells until the first reveal
+    const rollEnd = (plan.steps[0] ?? plan.outro) - 0.04;
+    for (let t = plan.ballotsTo - 0.6; t < rollEnd; t += 0.05) {
+      const k = Math.min(1, Math.max(0, (t - (plan.ballotsTo - 0.6)) / Math.max(0.1, rollEnd - (plan.ballotsTo - 0.6))));
+      this.noiseHit({ t: t0 + t, dur: 0.045, gain: 0.015 + k * 0.05, type: 'bandpass', freq: 230, q: 0.8, bus });
+    }
+    // one bright chime per machine, climbing a friendly pentatonic ladder
+    const ladder = [N.C5, N.D5, N.E5, N.G5, N.A5, N.C6, N.D5 * 2, N.E5 * 2, N.G5 * 2];
+    plan.steps.forEach((at, i) => {
+      const f = ladder[i % ladder.length];
+      this.noiseHit({ t: t0 + at, dur: 0.12, gain: 0.07, type: 'highpass', freq: 3000, bus });
+      this.tone({ freq: f, t: t0 + at, dur: 0.42, gain: 0.15, wave: 'triangle', bus });
+      this.tone({ freq: f * 1.5, t: t0 + at + 0.07, dur: 0.36, gain: 0.08, wave: 'sine', bus });
+      this.tone({ freq: f * 2, t: t0 + at + 0.14, dur: 0.5, gain: 0.07, wave: 'sine', bus });
+    });
+    // finale
+    [N.C5, N.E5, N.G5, N.C6].forEach((f, i) => {
+      this.tone({ freq: f, t: t0 + plan.outro + i * 0.11, dur: 0.7, gain: 0.12, wave: 'triangle', bus });
+    });
+    this.caption('🔊 Drumroll… the Count Show begins!');
+
+    return () => {
+      const n = ctx.currentTime;
+      bus.gain.cancelScheduledValues(n);
+      bus.gain.setValueAtTime(bus.gain.value, n);
+      bus.gain.linearRampToValueAtTime(0.0001, n + 0.12);
+      window.setTimeout(() => bus.disconnect(), 400);
+    };
+  }
 }
 
 /** Singleton — import `audio` anywhere. */

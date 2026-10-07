@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { PaperPanel, Btn } from './common';
 import { audio } from '../../lib/audio';
 import { VILLAGERS } from '../world/Villagers';
@@ -13,65 +13,91 @@ export function GatePanel(): React.JSX.Element {
   const seedInput = useGame((s) => s.seedInput);
   const closePanel = useGame((s) => s.closePanel);
   const openPanelFor = useGame((s) => s.openPanelFor);
+  const startRef = useRef<HTMLButtonElement>(null);
+  const cfg = MODES[mode];
+
+  // Put focus on the big button so Enter starts the festival right away.
+  useEffect(() => {
+    const id = window.setTimeout(() => startRef.current?.focus(), 80);
+    return () => window.clearTimeout(id);
+  }, []);
 
   return (
     <PaperPanel title="🎪 Welcome to the Animal Kingdom Election Festival!" wide>
-      <p>
-        Hello, <strong>Junior Forest Helper</strong>! Tonight the forest chooses its next
-        <strong> Festival Leader</strong>. Friendly animal candidates are running, the forest
-        voters are filling out their ballots, and the famous counting machines are polished
-        and ready.
+      <p className="gate-hello">
+        Hello, <strong>Junior Forest Helper</strong>! Tonight the forest picks its next
+        <strong> Festival Leader</strong> — and you get to see how the votes are counted.
       </p>
       <div className="quote-box big">
         Same voters. Same ballots. Different voting rules.<br />Will the same animal win?
       </div>
 
-      <h3>Pick your age mode</h3>
-      <div className="mode-grid">
-        {MODE_ORDER.map((m) => {
-          const cfg = MODES[m];
-          return (
-            <button
-              key={m}
-              type="button"
-              className={`mode-card${mode === m ? ' active' : ''}`}
-              aria-pressed={mode === m}
-              onMouseEnter={() => audio.hoverTick()}
-              onClick={() => setMode(m)}
-            >
-              <span className="mode-emoji">{cfg.emoji}</span>
-              <strong>{cfg.name}</strong>
-              <span className="muted small">{cfg.ages}</span>
-              <span className="small">{cfg.blurb}</span>
-            </button>
-          );
-        })}
+      <div className="start-wrap">
+        <button
+          ref={startRef}
+          type="button"
+          className="big-start"
+          onMouseEnter={() => audio.hoverTick()}
+          onClick={() => {
+            audio.click();
+            closePanel();
+          }}
+        >
+          ▶ Start the Festival!
+        </button>
+        <p className="muted small">A friendly firefly ✨ will float ahead and show you where to go.</p>
       </div>
 
-      <div className="btn-row">
-        <Btn kind="wood" onClick={() => openPanelFor('setup')}>
-          🎨 Festival Setup — pick candidates, issues, voters & families
-        </Btn>
-        <Btn kind="plain" onClick={loadTeachingExample}>
-          📚 Load the Teaching Example (100 fixed voters, all 9 machines)
-        </Btn>
+      <div className="key-strip" aria-label="How to move">
+        <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk</span>
+        <span><kbd>Space</kbd> hop</span>
+        <span><kbd>E</kbd> talk &amp; use</span>
+        <span><kbd>M</kbd> map</span>
+        <span><kbd>F</kbd> wave</span>
+        <span><kbd>Esc</kbd> close</span>
       </div>
-      <p className="muted small">
-        The Teaching Example works in every age mode and reliably shows different rules crowning
-        different winners. Today's festival election grows from Magic Seed <strong>{seedInput}</strong>
-        {' '}— change it in the Election Workshop.
-      </p>
 
-      <h3>How to play</h3>
-      <p>
-        Walk with <kbd>WASD</kbd> or the arrow keys. Drag the mouse to look around. When you see a
-        glowing ring, press <kbd>E</kbd> to interact. Press <kbd>Space</kbd> to hop (you can jump right onto the Rally Stage!), <kbd>F</kbd> to
-        wave hello, <kbd>Tab</kbd> for your Civic Notebook, and <kbd>Esc</kbd> to close any panel.
-        Everything important is always written down — sound is just for coziness.
-      </p>
-      <div className="btn-row">
-        <Btn kind="leaf" onClick={closePanel}>✨ Okay, let's explore the festival!</Btn>
-      </div>
+      <details className="grownups">
+        <summary>🧑‍🏫 For teachers &amp; grown-ups — age mode, festival setup, Teaching Example</summary>
+        <p className="muted small">
+          Playing now: {cfg.emoji} <strong>{cfg.name}</strong> ({cfg.ages}). Pick a different age
+          mode any time:
+        </p>
+        <div className="mode-grid">
+          {MODE_ORDER.map((m) => {
+            const c = MODES[m];
+            return (
+              <button
+                key={m}
+                type="button"
+                className={`mode-card${mode === m ? ' active' : ''}`}
+                aria-pressed={mode === m}
+                onMouseEnter={() => audio.hoverTick()}
+                onClick={() => setMode(m)}
+              >
+                <span className="mode-emoji">{c.emoji}</span>
+                <strong>{c.name}</strong>
+                <span className="muted small">{c.ages}</span>
+                <span className="small">{c.blurb}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="btn-row">
+          <Btn kind="wood" onClick={() => openPanelFor('setup')}>
+            🎨 Festival Setup — pick candidates, issues, voters &amp; families
+          </Btn>
+          <Btn kind="plain" onClick={loadTeachingExample}>
+            📚 Load the Teaching Example (100 fixed voters, all 9 machines)
+          </Btn>
+        </div>
+        <p className="muted small">
+          The Teaching Example works in every age mode and reliably shows different rules crowning
+          different winners. Today's festival election grows from Magic Seed <strong>{seedInput}</strong>
+          {' '}— change it in the Election Workshop. Sound is optional: everything important is
+          also written on screen.
+        </p>
+      </details>
     </PaperPanel>
   );
 }

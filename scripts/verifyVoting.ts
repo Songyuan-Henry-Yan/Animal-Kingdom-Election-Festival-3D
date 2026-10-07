@@ -15,6 +15,7 @@ import {
   runApproval, runScore, runSTAR, runCouncil, runSystems, SYSTEM_IDS,
 } from '../src/lib/voting';
 import type { Ballot, EventId, NeighborhoodSettings } from '../src/types/game';
+import { planCountShow, showPhase, ribbonTally, sampleBallots, stageSlots } from '../src/lib/countShow';
 
 let failures = 0;
 
@@ -141,6 +142,30 @@ check('original ballots untouched', ballots.every((b) => b.ranking.length === 5)
 const pluralityNoFlynn = runPlurality(noFlynn);
 check('spoiler effect: plurality winner changes when Flynn leaves', pluralityNoFlynn.winnerId, 'leo');
 check('Leo inherits Flynn fans (28+16)', pluralityNoFlynn.counts['leo'], 44);
+
+console.log('\n— Count Show plan (the cinematic only PRESENTS the same results) —');
+const showRun = {
+  source: 'teaching' as const,
+  seedLabel: 'teaching-example-fixed',
+  voterCount: ballots.length,
+  results: runSystems(ballots, [...SYSTEM_IDS].sort()),
+  metrics,
+  differentWinners: true,
+  eventIds: [] as EventId[],
+};
+const plan = planCountShow(showRun, ballots);
+check('show reveals machines in teaching order', plan.steps.map((r) => r.systemId), SYSTEM_IDS);
+check('show winners match the counted results', plan.steps.map((r) => r.winnerId),
+  ['flynn', 'penny', 'olive', 'dolly', 'dolly', 'dolly', 'dolly', 'dolly', 'penny']);
+check('show lineup = the five teaching candidates (roster order)', plan.roster, ['flynn', 'penny', 'olive', 'leo', 'dolly']);
+check('show counts 4 different winners', plan.distinctWinners, 4);
+check('phase at 0ms is the intro', showPhase(plan, 0).kind, 'intro');
+check('phase just after first step is machine #1', showPhase(plan, plan.firstStep + 10), { kind: 'step', index: 0, t: 10 });
+check('phase after the last step is the finale', showPhase(plan, plan.outroAt + 5).kind, 'outro');
+check('ribbon tally after all steps', ribbonTally(plan, plan.steps.length), { flynn: 1, penny: 2, olive: 1, dolly: 5 });
+check('ballot props sample 60 of 100 real ballots', sampleBallots(ballots, 60).length, 60);
+const slots = stageSlots(5);
+check('stage lineup is symmetric', Math.abs(slots[0].x + slots[4].x) < 1e-9 && Math.abs(slots[0].z - slots[4].z) < 1e-9, true);
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED ✔' : `\n${failures} CHECK(S) FAILED ✘`);
 process.exit(failures === 0 ? 0 : 1);

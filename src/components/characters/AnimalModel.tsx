@@ -1,4 +1,7 @@
-import React from 'react';
+import React, { useMemo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
+import { useGame } from '../../state/store';
 
 /**
  * Every character is built from spheres, capsules, cylinders, cones and boxes —
@@ -20,12 +23,26 @@ const Mat = ({ color, emissive }: { color: string; emissive?: string }) => (
   <meshStandardMaterial color={color} roughness={0.85} metalness={0} emissive={emissive ?? '#000000'} emissiveIntensity={emissive ? 0.35 : 0} />
 );
 
+/** Eyes that blink every few seconds (each animal on its own little rhythm). */
 function Eyes({ y = 1.15, z = 0.26, gap = 0.13, r = 0.045 }: { y?: number; z?: number; gap?: number; r?: number }) {
+  const ref = useRef<THREE.Group>(null);
+  const seed = useMemo(() => Math.random(), []);
+  useFrame(({ clock }) => {
+    const g = ref.current;
+    if (!g) return;
+    if (useGame.getState().reducedMotion) {
+      g.scale.y = 1;
+      return;
+    }
+    const period = 3.2 + seed * 2.6;
+    const t = (clock.elapsedTime + seed * 10) % period;
+    g.scale.y = t < 0.13 ? 0.15 : 1;
+  });
   return (
-    <>
-      <mesh position={[-gap, y, z]}><sphereGeometry args={[r, 10, 10]} /><Mat color="#241d16" /></mesh>
-      <mesh position={[gap, y, z]}><sphereGeometry args={[r, 10, 10]} /><Mat color="#241d16" /></mesh>
-    </>
+    <group ref={ref} position={[0, y, z]}>
+      <mesh position={[-gap, 0, 0]}><sphereGeometry args={[r, 10, 10]} /><Mat color="#241d16" /></mesh>
+      <mesh position={[gap, 0, 0]}><sphereGeometry args={[r, 10, 10]} /><Mat color="#241d16" /></mesh>
+    </group>
   );
 }
 

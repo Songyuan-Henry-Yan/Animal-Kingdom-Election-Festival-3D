@@ -24,6 +24,16 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const s = useGame.getState();
+      // During the Count Show: Esc / Enter / Space skip straight to the results.
+      if (s.countShow) {
+        if (e.key === 'Escape' || e.key === 'Enter' || e.code === 'Space') {
+          e.preventDefault();
+          s.finishCountShow();
+        } else if (e.key === 'Tab') {
+          e.preventDefault();
+        }
+        return;
+      }
       if (e.key === 'Tab') {
         e.preventDefault();
         toggleNotebook();

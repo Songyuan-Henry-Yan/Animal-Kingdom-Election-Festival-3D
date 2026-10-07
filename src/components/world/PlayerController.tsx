@@ -8,6 +8,15 @@ import {
 import { useGame } from '../../state/store';
 import { audio } from '../../lib/audio';
 import { net } from '../../lib/net';
+import { SHOW_CAMERA_LOOK, SHOW_CAMERA_POS } from '../../lib/countShow';
+
+const SHOW_POS = new THREE.Vector3(...SHOW_CAMERA_POS);
+const SHOW_LOOK = new THREE.Vector3(...SHOW_CAMERA_LOOK);
+const SHOW_DIR = new THREE.Vector3().subVectors(SHOW_POS, SHOW_LOOK).normalize();
+const SHOW_DEPTH = SHOW_POS.distanceTo(SHOW_LOOK);
+/** Half the width of the candidate lineup (plus a little air) that must stay in view. */
+const LINEUP_HALF_WIDTH = 3.6;
+const showSeat = new THREE.Vector3();
 
 const SPEED = 6.2;
 const GRAVITY = 14;
@@ -35,6 +44,8 @@ export function PlayerController(): React.JSX.Element {
   const lastGround = useRef(0);
   const proximityClock = useRef(0);
   const zoneClock = useRef(0);
+  /** 0 = following you, 1 = seated for the Count Show (eased in between). */
+  const showBlend = useRef(0);
   const { gl, camera } = useThree();
 
   useEffect(() => {
@@ -88,8 +99,11 @@ export function PlayerController(): React.JSX.Element {
 
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 0.05);
+    // The camera eases on real time, so a slow frame never leaves it lagging behind.
+    const camDt = Math.min(rawDt, 0.5);
     const state = useGame.getState();
-    const frozen = state.panel !== null;
+    const showing = state.countShow !== null;
+    const frozen = state.panel !== null || showing;
     const k = keys.current;
 
     let mx = 0;
@@ -170,6 +184,7 @@ export function PlayerController(): React.JSX.Element {
     lastGround.current = ground;
 
     if (group.current) {
+      group.current.visible = !showing; // step aside so the stage stays clear
       group.current.position.set(playerPos.x, playerPos.y, playerPos.z);
       if (performance.now() < playerFx.spinUntil && !state.reducedMotion) {
         group.current.rotation.y += dt * 11; // happy wave spin!
@@ -193,10 +208,22 @@ export function PlayerController(): React.JSX.Element {
     const camX = playerPos.x + Math.sin(yaw.current) * dist * Math.cos(pitch.current * 0.6);
     const camZ = playerPos.z + Math.cos(yaw.current) * dist * Math.cos(pitch.current * 0.6);
     const desired = new THREE.Vector3(camX, h, camZ);
-    const lerp = 1 - Math.pow(0.0001, dt);
-    camera.position.lerp(desired, lerp);
+    const lerp = 1 - Math.pow(0.0001, camDt);
     const look = new THREE.Vector3(playerPos.x, playerPos.y + 1.1, playerPos.z);
     if (cameraFocus.active) look.lerp(cameraFocus.point, 0.55);
+    // Count Show: glide up into the theater seats, then glide back afterwards.
+    showBlend.current = THREE.MathUtils.clamp(showBlend.current + (showing ? camDt : -camDt) / 0.9, 0, 1);
+    const sb = showBlend.current * showBlend.current * (3 - 2 * showBlend.current);
+    if (sb > 0) {
+      // Narrow (portrait) screens see less sideways — scoot back so every candidate fits.
+      const persp = camera as THREE.PerspectiveCamera;
+      const halfTan = Math.tan(THREE.MathUtils.degToRad(persp.fov / 2)) * persp.aspect;
+      const back = THREE.MathUtils.clamp(LINEUP_HALF_WIDTH / Math.max(0.15, halfTan) - SHOW_DEPTH, 0, 9);
+      showSeat.copy(SHOW_POS).addScaledVector(SHOW_DIR, back);
+      desired.lerp(showSeat, sb);
+      look.lerp(SHOW_LOOK, sb);
+    }
+    camera.position.lerp(desired, lerp);
     camera.lookAt(look);
 
     // ---- share our position with the Festival Room (throttled inside) ----

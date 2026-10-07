@@ -1,5 +1,9 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
 import { Sparkles } from '@react-three/drei';
+import { useGame } from '../../state/store';
+import { FestivalDecor, STATION_SPOTS } from './FestivalDecor';
 import { mulberry32 } from '../../lib/random';
 import { FestivalGate } from './FestivalGate';
 import { ElectionWorkshop } from './ElectionWorkshop';
@@ -19,8 +23,21 @@ import { FireflyGuide } from './FireflyGuide';
 import { RemotePlayers } from './RemotePlayers';
 
 function Tree({ x, z, s, kind }: { x: number; z: number; s: number; kind: number }): React.JSX.Element {
+  const ref = useRef<THREE.Group>(null);
+  // A gentle evening breeze: each tree sways a little, out of step with its neighbours.
+  useFrame(({ clock }) => {
+    const g = ref.current;
+    if (!g) return;
+    if (useGame.getState().reducedMotion) {
+      g.rotation.set(0, 0, 0);
+      return;
+    }
+    const t = clock.elapsedTime * 0.9 + x * 0.37 + z * 0.21;
+    g.rotation.z = Math.sin(t) * 0.022;
+    g.rotation.x = Math.cos(t * 0.8) * 0.016;
+  });
   return (
-    <group position={[x, 0, z]} scale={[s, s, s]}>
+    <group ref={ref} position={[x, 0, z]} scale={[s, s, s]}>
       <mesh position={[0, 0.9, 0]}>
         <cylinderGeometry args={[0.18, 0.28, 1.8, 8]} />
         <meshStandardMaterial color="#7a5230" roughness={0.95} />
@@ -56,16 +73,13 @@ function Flower({ x, z, tint }: { x: number; z: number; tint: string }): React.J
 function Cloud({ x, y, z, s }: { x: number; y: number; z: number; s: number }): React.JSX.Element {
   return (
     <group position={[x, y, z]} scale={[s, s * 0.6, s]}>
-      <mesh><sphereGeometry args={[1.6, 10, 10]} /><meshStandardMaterial color="#fff4e2" roughness={1} /></mesh>
-      <mesh position={[1.4, -0.1, 0.2]}><sphereGeometry args={[1.1, 10, 10]} /><meshStandardMaterial color="#fff4e2" roughness={1} /></mesh>
-      <mesh position={[-1.3, -0.15, -0.1]}><sphereGeometry args={[1.0, 10, 10]} /><meshStandardMaterial color="#fff4e2" roughness={1} /></mesh>
+      <mesh userData={{ noShadow: true }}><sphereGeometry args={[1.6, 10, 10]} /><meshStandardMaterial color="#fff4e2" roughness={1} /></mesh>
+      <mesh position={[1.4, -0.1, 0.2]} userData={{ noShadow: true }}><sphereGeometry args={[1.1, 10, 10]} /><meshStandardMaterial color="#fff4e2" roughness={1} /></mesh>
+      <mesh position={[-1.3, -0.15, -0.1]} userData={{ noShadow: true }}><sphereGeometry args={[1.0, 10, 10]} /><meshStandardMaterial color="#fff4e2" roughness={1} /></mesh>
     </group>
   );
 }
 
-const STATION_SPOTS: [number, number][] = [
-  [0, 23], [-17, 13], [-17, -6], [0, -19], [13, -13], [19, -4], [17.2, 8.2], [9, 16], [-8, 17], [-12, -1],
-];
 
 export function ForestPlaza(): React.JSX.Element {
   const trees = useMemo(() => {
@@ -102,7 +116,7 @@ export function ForestPlaza(): React.JSX.Element {
         <meshStandardMaterial color="#7fae66" roughness={1} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
-        <circleGeometry args={[46, 48]} />
+        <circleGeometry args={[150, 64]} />
         <meshStandardMaterial color="#6a9757" roughness={1} />
       </mesh>
       {/* center plaza disc + paths to stations */}
@@ -138,6 +152,8 @@ export function ForestPlaza(): React.JSX.Element {
       {/* glowing fireflies */}
       <Sparkles count={100} scale={[52, 6, 52]} position={[0, 3, 0]} size={2.8} speed={0.25} opacity={0.85} color="#ffe9a0" noise={1} />
       <Sparkles count={24} scale={[8, 5, 8]} position={[0, 4, 0]} size={3.4} speed={0.35} opacity={0.9} color="#fff2b8" noise={1} />
+
+      <FestivalDecor />
 
       {/* stations */}
       <FestivalGate />

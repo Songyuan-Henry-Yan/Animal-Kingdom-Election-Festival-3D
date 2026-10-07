@@ -52,6 +52,8 @@ export function SettingsPanel(): React.JSX.Element {
   const reducedMotion = useGame((s) => s.reducedMotion);
   const hideLeanings = useGame((s) => s.hideLeanings);
   const setHideLeanings = useGame((s) => s.setHideLeanings);
+  const gfx = useGame((s) => s.gfx);
+  const setGfx = useGame((s) => s.setGfx);
 
   return (
     <PaperPanel title="⚙️ Settings">
@@ -84,6 +86,16 @@ export function SettingsPanel(): React.JSX.Element {
           voters are not influenced before a real classroom election.
         </p>
       </div>
+
+      <h3>Graphics</h3>
+      <div className="btn-row">
+        <Btn kind="plain" pressed={gfx === 'cozy'} onClick={() => setGfx('cozy')}>✨ Cozy — soft shadows &amp; extra grass</Btn>
+        <Btn kind="plain" pressed={gfx === 'speedy'} onClick={() => setGfx('speedy')}>⚡ Speedy — for slower computers</Btn>
+      </div>
+      <p className="muted small">
+        If the forest feels slow or jumpy (common on school Chromebooks), pick Speedy. Your choice
+        is saved on this device.
+      </p>
 
       <h3>Motion</h3>
       <p className="muted small">

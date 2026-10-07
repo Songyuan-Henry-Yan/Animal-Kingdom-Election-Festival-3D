@@ -2,6 +2,7 @@ import React from 'react';
 import { useGame, currentQuest } from '../../state/store';
 import { STICKERS } from '../../data/stickers';
 import { audio } from '../../lib/audio';
+import { CountShowOverlay } from './CountShowOverlay';
 
 export function HUD(): React.JSX.Element {
   const nearby = useGame((s) => s.nearby);
@@ -16,6 +17,16 @@ export function HUD(): React.JSX.Element {
   const netStatus = useGame((s) => s.netStatus);
   const netCode = useGame((s) => s.netCode);
   const netPeers = useGame((s) => s.netPeers);
+  const showing = useGame((s) => s.countShow !== null);
+
+  if (showing) {
+    return (
+      <>
+        <CountShowOverlay />
+        <div className="caption-line in-show" aria-live="polite">{caption}</div>
+      </>
+    );
+  }
 
   return (
     <>

@@ -22,6 +22,8 @@ import type { SharedSetup } from '../lib/shareCode';
 import { encodeShareCode, decodeShareCode } from '../lib/shareCode';
 import { net } from '../lib/net';
 import type { NetPeer, NetRunMsg, NetSpecies } from '../lib/net';
+import { planCountShow, type CountShowState } from '../lib/countShow';
+import { loadQuality, saveQuality, type GfxQuality } from '../lib/graphics';
 
 export interface QuestStep {
   id: string;
@@ -109,6 +111,11 @@ interface GameState {
   running: boolean;
   theaterPulse: number;
 
+  /** The cinematic Count Show currently playing at the theater (null when idle). */
+  countShow: CountShowState | null;
+  /** Graphics quality: cozy (shadows) or speedy (for slower computers). */
+  gfx: GfxQuality;
+
   // 🌐 online Festival Room (multiplayer)
   netStatus: 'off' | 'connecting' | 'online';
   netRole: 'host' | 'guest' | null;
@@ -148,7 +155,15 @@ interface GameState {
   drawNews: () => void;
   toggleSystem: (id: SystemId) => void;
   setBallotSource: (s: BallotSource) => void;
-  runElection: () => void;
+  /** Count the ballots. `instant` skips the Count Show (used for late joiners). */
+  runElection: (opts?: { instant?: boolean }) => void;
+  /** Ends the Count Show (Skip, or when it finishes) and reveals the results. */
+  finishCountShow: (id?: number) => void;
+  /** Re-watch the last count as a Count Show. */
+  replayCountShow: () => void;
+  /** Records a finished count: results, challenges, and (optionally) opens the theater. */
+  commitRun: (run: ElectionRun, ballots: Ballot[], opts: { openPanel: boolean; quiet?: boolean }) => void;
+  setGfx: (q: GfxQuality) => void;
 
   sealClassroomBallot: (ranking: CandidateId[], approvals: CandidateId[], scores: Record<string, number>) => void;
   addClassroomBots: (k: number) => void;
@@ -167,6 +182,61 @@ interface GameState {
 }
 
 let captionTimer: number | undefined;
+
+let showSeq = 0;
+let showTimer: number | undefined;
+let stopShowAudio: (() => void) | null = null;
+
+/** Works out WHICH ballots to count and runs every selected machine on that one stack. */
+function computeRun(st: GameState): { run: ElectionRun; ballots: Ballot[] } {
+  let ballots: Ballot[];
+  let seedLabel: string;
+  if (st.ballotSource === 'festival') {
+    ballots = st.game.ballots; // stored once — reused for every rule
+    seedLabel = `festival-${festivalSeedLabel(gameKey(st.seedInput, st.mode, st.neighborhood, st.polarization, st.drawnEvents, st.custom))}`;
+  } else if (st.ballotSource === 'classroom') {
+    ballots = st.classroomBallots;
+    seedLabel = `classroom-${st.classroomBallots.length}-ballots`;
+  } else {
+    ballots = getTeachingBallots();
+    seedLabel = 'teaching-example-fixed';
+  }
+  const ordered = [...st.selectedSystems].sort();
+  const results = runSystems(ballots, ordered);
+  const metrics = computeMetrics(ballots);
+  const winnerSet = new Set(results.map((r) => r.winnerId));
+  const run: ElectionRun = {
+    source: st.ballotSource,
+    seedLabel,
+    voterCount: ballots.length,
+    results,
+    metrics,
+    differentWinners: winnerSet.size > 1,
+    eventIds: st.ballotSource === 'festival' ? st.drawnEvents : [],
+  };
+  return { run, ballots };
+}
+
+/** Rolls the camera to the theater and starts the Count Show cinematic. */
+function startCountShow(run: ElectionRun, ballots: Ballot[], replay: boolean): void {
+  const id = ++showSeq;
+  window.clearTimeout(showTimer);
+  stopShowAudio?.();
+  const plan = planCountShow(run, ballots);
+  stopShowAudio = audio.countShow({
+    ballotsFrom: plan.ballotsFrom / 1000,
+    ballotsTo: plan.ballotsTo / 1000,
+    steps: plan.steps.map((_, i) => (plan.firstStep + i * plan.stepMs) / 1000),
+    outro: plan.outroAt / 1000,
+  });
+  audio.duckMusic(0.3);
+  cameraFocus.active = false;
+  useGame.setState({
+    panel: null,
+    countShow: { id, startedAt: performance.now(), run, ballots, replay },
+  });
+  showTimer = window.setTimeout(() => useGame.getState().finishCountShow(id), plan.total);
+}
 
 /** True while a room broadcast is being applied — bypasses the guest gates below. */
 let netDriven = false;
@@ -259,6 +329,9 @@ export const useGame = create<GameState>((set, get) => ({
   running: false,
   theaterPulse: 0,
 
+  countShow: null,
+  gfx: loadQuality(),
+
   netStatus: 'off',
   netRole: null,
   netCode: null,
@@ -268,6 +341,7 @@ export const useGame = create<GameState>((set, get) => ({
 
   openPanelFor: (kind, id, focus) => {
     const s = get();
+    if (s.countShow) return; // the Count Show has the stage — panels wait until it ends
     const visited = { ...s.visited, [kind]: true };
     set({ panel: { kind, id }, visited });
 
@@ -557,9 +631,14 @@ export const useGame = create<GameState>((set, get) => ({
     set({ ballotSource: src, predictions: {} });
   },
 
-  runElection: () => {
-    const s = get();
-    if (s.running) return;
+  runElection: (opts) => {
+    let s = get();
+    if (s.running) {
+      // A new room broadcast arrived mid-show: wrap up the current show first.
+      if (!(netDriven && s.countShow)) return;
+      get().finishCountShow();
+      s = get();
+    }
     if (s.netRole === 'guest' && !netDriven) {
       get().setCaption('🌐 Only your teacher can start the counting machines in an online room.');
       return;
@@ -576,59 +655,76 @@ export const useGame = create<GameState>((set, get) => ({
       get().setCaption('🗳️ The classroom ballot box is empty — seal at least one ballot in the Secret Ballot Booth first.');
       return;
     }
+
+    // Count once, right now. The show only *presents* these results.
+    const { run, ballots } = computeRun(s);
+
+    if (opts?.instant) {
+      get().commitRun(run, ballots, { openPanel: false, quiet: true });
+      return;
+    }
     audio.machineStart();
     set({ running: true, theaterPulse: Date.now() });
+    if (s.reducedMotion) {
+      // Calm mode: no cinematic — results simply appear in the open theater panel.
+      window.setTimeout(() => get().commitRun(run, ballots, { openPanel: false }), 60);
+      return;
+    }
+    startCountShow(run, ballots, false);
+  },
 
-    const finish = () => {
-      const st = get();
-      let ballots: Ballot[];
-      let seedLabel: string;
-      if (st.ballotSource === 'festival') {
-        ballots = st.game.ballots; // stored once — reused for every rule
-        seedLabel = `festival-${festivalSeedLabel(gameKey(st.seedInput, st.mode, st.neighborhood, st.polarization, st.drawnEvents, st.custom))}`;
-      } else if (st.ballotSource === 'classroom') {
-        ballots = st.classroomBallots;
-        seedLabel = `classroom-${st.classroomBallots.length}-ballots`;
-      } else {
-        ballots = getTeachingBallots();
-        seedLabel = 'teaching-example-fixed';
-      }
-      const ordered = [...st.selectedSystems].sort();
-      const results = runSystems(ballots, ordered);
-      const metrics = computeMetrics(ballots);
-      const winnerSet = new Set(results.map((r) => r.winnerId));
-      const run: ElectionRun = {
-        source: st.ballotSource,
-        seedLabel,
-        voterCount: ballots.length,
-        results,
-        metrics,
-        differentWinners: winnerSet.size > 1,
-        eventIds: st.ballotSource === 'festival' ? st.drawnEvents : [],
-      };
+  finishCountShow: (id) => {
+    const show = get().countShow;
+    if (!show || (id !== undefined && id !== show.id)) return;
+    window.clearTimeout(showTimer);
+    stopShowAudio?.();
+    stopShowAudio = null;
+    set({ countShow: null });
+    if (show.replay) {
+      get().openPanelFor('theater');
+      return;
+    }
+    get().commitRun(show.run, show.ballots, { openPanel: true });
+  },
+
+  replayCountShow: () => {
+    const s = get();
+    if (!s.lastRun || !s.lastRunBallots || s.running || s.countShow) return;
+    audio.machineStart();
+    startCountShow(s.lastRun, s.lastRunBallots, true);
+  },
+
+  commitRun: (run, ballots, opts) => {
+    const st = get();
+    if (!opts.quiet) {
       audio.machineFinish();
       audio.resultRibbon();
-      set({ lastRun: run, lastRunBallots: ballots, running: false });
+    }
+    set({ lastRun: run, lastRunBallots: ballots, running: false });
 
-      // 🏆 challenge detection
-      const winners = results.map((r) => r.winnerId);
-      const distinct = new Set(winners).size;
-      if (results.length >= 4 && distinct === 1) get().markChallenge('agreement');
-      if (distinct >= 4) get().markChallenge('disagreement');
-      const hits = results.filter((r) => st.predictions[r.systemId] === r.winnerId).length;
-      if (st.votersMet.length >= 5 && hits >= 3) get().markChallenge('pollster');
-      if (st.ballotSource === 'festival') {
-        const prev = st.prevFestivalWinners;
-        if (prev && results.some((r) => prev[r.systemId] && prev[r.systemId] !== r.winnerId)) {
-          get().markChallenge('flip');
-        }
-        const nextPrev: Record<string, CandidateId> = { ...(prev ?? {}) };
-        for (const r of results) nextPrev[r.systemId] = r.winnerId;
-        set({ prevFestivalWinners: nextPrev });
+    // 🏆 challenge detection
+    const results = run.results;
+    const winners = results.map((r) => r.winnerId);
+    const distinct = new Set(winners).size;
+    if (results.length >= 4 && distinct === 1) get().markChallenge('agreement');
+    if (distinct >= 4) get().markChallenge('disagreement');
+    const hits = results.filter((r) => st.predictions[r.systemId] === r.winnerId).length;
+    if (st.votersMet.length >= 5 && hits >= 3) get().markChallenge('pollster');
+    if (run.source === 'festival') {
+      const prev = st.prevFestivalWinners;
+      if (prev && results.some((r) => prev[r.systemId] && prev[r.systemId] !== r.winnerId)) {
+        get().markChallenge('flip');
       }
-    };
+      const nextPrev: Record<string, CandidateId> = { ...(prev ?? {}) };
+      for (const r of results) nextPrev[r.systemId] = r.winnerId;
+      set({ prevFestivalWinners: nextPrev });
+    }
+    if (opts.openPanel) get().openPanelFor('theater');
+  },
 
-    window.setTimeout(finish, get().reducedMotion ? 60 : 900);
+  setGfx: (q) => {
+    saveQuality(q);
+    set({ gfx: q });
   },
 
   /* ------------------------- classroom vote ------------------------- */
@@ -893,11 +989,12 @@ function applyNetRun(msg: NetRunMsg, live: boolean): void {
   }
   useGame.setState(patch);
   const st = useGame.getState();
-  if (live && !st.panel) st.openPanelFor('theater');
+  // Calm-motion players skip the cinematic, so show them the theater right away.
+  if (live && st.reducedMotion && !st.panel) st.openPanelFor('theater');
   if (live) st.setCaption('🎭 Your teacher started the counting machines — same ballots for everyone!');
   netDriven = true;
   try {
-    st.runElection();
+    st.runElection({ instant: !live });
   } finally {
     netDriven = false;
   }

@@ -145,6 +145,14 @@ approval, and score ballots) → Counting Machine Arcade (switch any of 9 machin
 ribbons, round-by-round replays, a Condorcet pairwise matrix, STAR's score-then-runoff, and
 council seats) → Campfire Reflection Circle. The Forest Charter Tree stands in the center.
 
+**The Count Show 🎭.** Pressing ▶ in the Counting Theater rolls the camera into the theater
+seats: the candidates step onto the stage, sample paper ballots fly to each voter's *first
+choice* (so the piles show plain "most favorites"), and then a spotlight hops from winner to
+winner as each machine reads the **same ballots** its own way. Captions write every moment on
+screen, Esc/Enter/Space skips to the results, and 🎬 *Watch the Count Show again* replays it.
+In online rooms the whole class watches the same show at the same moment. Reduced-motion
+players skip straight to the results.
+
 Extras: three ballot stacks in the Theater (Teaching / Festival / Classroom), a Forest Passport with 8 motivational stickers (they never affect results),
 **Teacher Mode** (formal system names, real-world connections, longer pros/cons, classroom
 prompts), and a **Print Summary** button (results or reflection panel) that prints the seed,
@@ -173,6 +181,9 @@ Keyboard-only play is fully supported (including all three practice ballots), fo
 always visible, no meaning is carried by color alone, text is large for projectors, captions
 describe sounds and voices, and the OS **reduced-motion** preference calms idle bobbing,
 spinning machines, ribbon animations, and pulses automatically.
+
+**Graphics:** ⚙️ Settings offers *Cozy* (soft sun shadows, extra grass) and *Speedy* (no
+shadows — smooth on school Chromebooks). Smaller or touch-first devices start in Speedy.
 
 ## Nonpartisan note
 
